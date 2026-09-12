@@ -385,10 +385,18 @@ void TextBufferWrapper::position_for_character_index(const Nan::FunctionCallback
 
 static Local<Value> encode_ranges(const vector<Range> &ranges) {
   auto length = ranges.size() * 4;
-  auto buffer = v8::ArrayBuffer::New(v8::Isolate::GetCurrent(), length * sizeof(uint32_t));
-  auto result = v8::Uint32Array::New(buffer, 0, length);
-  auto data = buffer->GetBackingStore()->Data();
-  memcpy(data, ranges.data(), length * sizeof(uint32_t));
+  auto store = v8::ArrayBuffer::NewBackingStore(
+    nullptr,
+    length * sizeof(uint32_t),
+    v8::BackingStore::EmptyDeleter,
+    nullptr
+  );
+  memcpy(store->Data(), ranges.data(), length * sizeof(uint32_t));
+  auto result = v8::Uint32Array::New(
+    v8::ArrayBuffer::New(v8::Isolate::GetCurrent(), std::move(store)),
+    0,
+    length
+  );
   return result;
 }
 
@@ -610,8 +618,13 @@ void TextBufferWrapper::find_words_with_subsequence_in_range(const Nan::Function
         positions_buffer_size += sizeof(uint32_t) + subsequence_match.positions.size() * sizeof(Point);
       }
 
-      auto positions_buffer = v8::ArrayBuffer::New(v8::Isolate::GetCurrent(), positions_buffer_size);
-      uint32_t *positions_data = reinterpret_cast<uint32_t *>(positions_buffer->GetBackingStore()->Data());
+      auto store = v8::ArrayBuffer::NewBackingStore(
+        nullptr,
+        positions_buffer_size,
+        v8::BackingStore::EmptyDeleter,
+        nullptr
+      );
+      uint32_t *positions_data = reinterpret_cast<uint32_t *>(store->Data());
 
       uint32_t positions_array_index = 0;
       for (size_t i = 0; i < result.size() && i < max_count; i++) {
@@ -627,6 +640,7 @@ void TextBufferWrapper::find_words_with_subsequence_in_range(const Nan::Function
         Nan::Set(js_matches_array, i, SubsequenceMatchWrapper::from_subsequence_match(match));
       }
 
+      auto positions_buffer = v8::ArrayBuffer::New(v8::Isolate::GetCurrent(), std::move(store));
       auto positions_array = v8::Uint32Array::New(positions_buffer, 0, positions_buffer_size / sizeof(uint32_t));
       Local<Value> argv[] = {js_matches_array, positions_array};
       callback->Call(2, argv, async_resource);
