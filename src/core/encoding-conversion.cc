@@ -119,12 +119,7 @@ int EncodingConversion::convert(
       size_t output_length = output_end - *output;
       auto conversion_result = iconv(
         converter,
-#if defined(__APPLE__)
-        // macOS libiconv takes `const char **` (glibc takes `char **`).
-        input,
-#else
         const_cast<char **>(input),
-#endif
         &input_length,
         output,
         &output_length
